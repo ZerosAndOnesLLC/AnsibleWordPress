@@ -1,0 +1,34 @@
+<VirtualHost *:80>
+    ServerName {{ server_domain }}
+    ServerAlias {{ server_alias }}
+    DocumentRoot {{ doc_root }}/wordpress
+
+    <Directory {{ doc_root }}/wordpress>
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog /var/log/httpd/{{ server_domain }}_error.log
+    CustomLog /var/log/httpd/{{ server_domain }}_access.log combined
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName {{ server_domain }}
+    ServerAlias {{ server_alias }}
+    DocumentRoot {{ doc_root }}/wordpress
+
+    SSLEngine on
+    SSLCertificateFile /etc/pki/tls/certs/localhost.crt
+    SSLCertificateKeyFile /etc/pki/tls/private/localhost.key
+
+    <Directory {{ doc_root }}/wordpress>
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog /var/log/httpd/{{ server_domain }}_ssl_error.log
+    CustomLog /var/log/httpd/{{ server_domain }}_ssl_access.log combined
+</VirtualHost>
+

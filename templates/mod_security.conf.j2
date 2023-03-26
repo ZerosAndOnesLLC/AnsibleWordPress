@@ -1,0 +1,15 @@
+# ModSecurity main configuration file
+LoadModule security2_module modules/mod_security2.so
+
+<IfModule mod_security2.c>
+    SecRuleEngine On
+    SecRequestBodyAccess On
+    SecResponseBodyAccess On
+    SecResponseBodyMimeType text/plain text/html text/xml
+    SecDataDir /tmp
+
+    # Default recommended rules
+    IncludeOptional /etc/httpd/modsecurity.d/*.conf
+    IncludeOptional /etc/httpd/modsecurity.d/activated_rules/*.conf
+</IfModule>
+
