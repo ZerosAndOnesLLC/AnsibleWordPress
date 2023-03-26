@@ -1,0 +1,176 @@
+---
+- name: Install and Configure LAMP Stack with Virtual Hosts and WordPress on RedHat-based Systems
+  hosts: webservers:dbservers
+  become: yes
+  vars:
+    server_domain: samplesite.com
+    server_alias: www.samplesite.com
+    doc_root: /var/www/samplesite
+    db_host: your_database_server
+    db_name: wordpress_db
+    db_user: wordpress_user
+    db_password: your_secure_password
+
+  tasks:
+    - name: Install EPEL repository
+      ansible.builtin.command:
+        cmd: yum install -y epel-release
+        warn: no
+      when: "'webservers' in group_names or 'dbservers' in group_names"
+
+    - name: Install dnf-utils
+      ansible.builtin.yum:
+        name: dnf-utils
+        state: present
+      when: "'webservers' in group_names"
+
+    - name: Install REMI repository
+      ansible.builtin.command:
+        cmd: yum install -y https://rpms.remirepo.net/enterprise/remi-release-{{ ansible_distribution_major_version }}.rpm
+        warn: no
+      when: "'webservers' in group_names"
+
+    - name: Enable PHP 8.2 Remi repository
+      ansible.builtin.command:
+        cmd: dnf config-manager --set-enabled remi-php82
+      when: "'webservers' in group_names and ('{{ ansible_distribution }}' == 'RedHat' or '{{ ansible_distribution }}' == 'CentOS')"
+
+    - name: Install LAMP packages
+      ansible.builtin.yum:
+        name:
+          - httpd
+          - mod_ssl
+          - php
+          - php-cli
+          - php-fpm
+          - php-mysqlnd
+          - php-zip
+          - php-xml
+          - php-mbstring
+          - php-gd
+          - php-curl
+          - php-opcache
+          - mod_security
+          - unzip
+        state: present
+      when: "'webservers' in group_names"
+
+    - name: Install standard tools we use on linux
+      ansible.builtin.yum:
+        name:
+          - vim
+          - mc
+        state: present
+      when: "'webservers' in group_names or 'dbservers' in group_names"
+
+    - name: Start and enable Apache, PHP-FPM, and MySQL services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - httpd
+        - php-fpm
+      when: "'webservers' in group_names"
+
+    - name: Install mod_security rules
+      ansible.builtin.yum:
+        name:
+          - mod_security_crs
+        state: present
+      when: "'webservers' in group_names"
+
+    - name: Configure mod_security
+      ansible.builtin.template:
+        src: mod_security.conf.j2
+        dest: /etc/httpd/conf.d/mod_security.conf
+        owner: root
+        group: root
+        mode: 0644
+      when: "'webservers' in group_names"
+
+    - name: Create Document Root
+      ansible.builtin.file:
+        path: "{{ doc_root }}"
+        state: directory
+        owner: apache
+        group: apache
+        mode: 0755
+      when: "'webservers' in group_names"
+
+    - name: Configure Virtual Host
+      ansible.builtin.template:
+        src: vhost.conf.j2
+        dest: "/etc/httpd/conf.d/{{ server_domain }}.conf"
+        owner: root
+        group: root
+        mode: 0644
+      when: "'webservers' in group_names"
+      notify:
+        - restart apache
+
+    - name: Install WordPress
+      ansible.builtin.unarchive:
+        src: https://wordpress.org/latest.zip
+        dest: "{{ doc_root }}"
+        remote_src: yes
+        owner: apache
+        group: apache
+        creates: "{{ doc_root }}/wordpress"
+      when: "'webservers' in group_names"
+
+    - name: Configure WordPress
+      ansible.builtin.template:
+        src: wp-config.php.j2
+        dest: "{{ doc_root }}/wordpress/wp-config.php"
+        owner: apache
+        group: apache
+        mode: 0644
+      when: "'webservers' in group_names"
+
+    - name: Install MySQL server on dbservers group
+      ansible.builtin.yum:
+        name:
+          - mysql-server
+          - mysql
+          - python3-devel
+          - python3-pip
+        state: present
+      when: "'dbservers' in group_names"
+
+    - name: Install PyMySQL system-wide for Python 3.x
+      become: yes
+      ansible.builtin.pip:
+        name: pymysql
+        state: present
+        executable: /usr/bin/pip3
+      when: "'dbservers' in group_names"
+
+    - name: Start and enable MySQL services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - mysqld
+      when: "'dbservers' in group_names"
+
+    - name: Set ansible_python_interpreter to Python 3
+      set_fact:
+        ansible_python_interpreter: /usr/bin/python3
+
+    - name: Create MySQL user
+      ansible.builtin.mysql_user:
+        login_unix_socket: /var/lib/mysql/mysql.sock
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        priv: "{{ db_name }}.*:ALL"
+        state: present
+      when: "'dbservers' in group_names"
+
+  handlers:
+    - name: restart apache
+      ansible.builtin.systemd:
+        name: httpd
+        state: restarted
+
