@@ -23,3 +23,5 @@ if ( !defined('ABSPATH') )
     define('ABSPATH', dirname(__FILE__) . '/');
 require_once(ABSPATH . 'wp-settings.php');
 
+define('MYSQL_CLIENT_FLAGS', MYSQLI_CLIENT_SSL);
+define('MYSQL_SSL_VERIFY_SERVER_CERT', false);

@@ -6,10 +6,10 @@
     server_domain: samplesite.com
     server_alias: www.samplesite.com
     doc_root: /var/www/samplesite
-    db_host: your_database_server
+    db_host: 172.29.50.74
     db_name: wordpress_db
     db_user: wordpress_user
-    db_password: your_secure_password
+    db_password: LJKIHnasiuhniukansiunawQ!
 
   tasks:
     - name: Install EPEL repository
@@ -146,6 +146,23 @@
         executable: /usr/bin/pip3
       when: "'dbservers' in group_names"
 
+    - name: Create WordPress MySQL database
+      ansible.builtin.mysql_db:
+        name: wordpress_db
+        state: present
+      when: "'dbservers' in group_names"
+      delegate_to: "{{ groups['dbservers'][0] }}"
+
+    - name: Create WordPress MySQL user and grant privileges
+      ansible.builtin.mysql_user:
+        name: wordpress_user
+        password: your_password
+        host: '%'
+        priv: 'wordpress_db.*:ALL'
+        state: present
+      when: "'dbservers' in group_names"
+      delegate_to: "{{ groups['dbservers'][0] }}"
+
     - name: Start and enable MySQL services
       ansible.builtin.systemd:
         name: "{{ item }}"
@@ -166,6 +183,27 @@
         password: "{{ db_password }}"
         priv: "{{ db_name }}.*:ALL"
         state: present
+      when: "'dbservers' in group_names"
+
+    - name: Open ports 80 and 443 in firewall
+      ansible.builtin.firewalld:
+        port: "{{ item }}"
+        permanent: yes
+        state: enabled
+        immediate: yes
+        zone: public
+      loop:
+        - 80/tcp
+        - 443/tcp
+      when: "'webservers' in group_names"
+
+    - name: Open port 3306 in firewall for MySQL
+      ansible.builtin.firewalld:
+        port: 3306/tcp
+        permanent: yes
+        state: enabled
+        immediate: yes
+        zone: public
       when: "'dbservers' in group_names"
 
   handlers:
